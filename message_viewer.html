@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<head>
+	<title>Message viewer</title>
+	
+	<style>
+		#chat {
+			margin: 10px;
+		}
+		.divMessage {
+			font-family: "Helvetica", "Arial", sans-serif;
+			border-radius: 20px;
+			max-width: 600px;
+			padding-left: 20px;
+			padding-right: 20px;
+			padding-top: 5px;
+			padding-bottom: 5px;
+			margin-bottom: 20px;
+			clear: both;
+		}
+		.divMessageSent {
+			color: white;
+			background-color: #3285ff;
+			float: right;
+		}
+		.divMessageRecieved {
+			background-color: #e4e6eb;
+			max-width: 600px;
+			float: left;
+		}
+		.divName {
+			font-weight: bold;
+			font-size: 12px;
+		}
+		.divDate {
+			font-style: italic;
+			font-size: 10px;
+		}
+		.divContent {
+			font-size: 12px;
+		}
+		
+		.image {
+			max-width: 560px;
+		}
+		
+		.video {
+			max-width: 560px;
+		}
+		
+		.sticker {
+			max-width: 100px;
+		}
+	</style>
+	
+	<script>
+		var reverseOrder = true;
+		var fbSpecialDecoding = true;
+		var alwaysShowName = true;
+	
+		function renderMessage(element, message, wasReceived, showName) {
+			var div = document.createElement("div");
+			div.classList.add("divMessage");
+			if (!wasReceived) {
+				div.classList.add("divMessageSent");
+			} else {
+				div.classList.add("divMessageRecieved");
+			}
+			
+			if (showName) {
+				var divName = document.createElement("div");
+				divName.classList.add("divName");
+				divName.innerHTML = message.sender_name;
+				div.appendChild(divName);
+			}
+			
+			var divDate = document.createElement("div");
+			divDate.classList.add("divDate");
+			var date = new Date(message.timestamp_ms);
+			divDate.innerHTML = date.toLocaleString();
+			
+			div.appendChild(divDate);
+			
+			var divContent = document.createElement("div");
+			divContent.classList.add("divContent");
+
+			if (message.content) {
+				divContent.appendChild(document.createTextNode(message.content));
+			}
+
+			if (message.photos) {
+				for (var i=0; i < message.photos.length; i++) {
+					var img = document.createElement("img");
+					img.classList.add("image");
+					img.src = message.photos[i].uri;
+					divContent.appendChild(img);
+				}
+			}
+			
+			if (message.videos) {
+					for (var i=0; i < message.videos.length; i++) {
+					var video = document.createElement("video");
+					video.setAttribute("controls", true);
+					video.classList.add("video");
+					video.src = message.videos[i].uri;
+					divContent.appendChild(video);
+				}
+			}
+			
+			if (message.sticker) {
+				var img = document.createElement("img");
+				img.classList.add("sticker");
+				img.src = message.sticker.uri;
+				divContent.appendChild(img);
+			}
+			
+			div.appendChild(divContent);
+			
+			element.appendChild(div);
+		}
+	
+		function processData(data) {
+			var chatElement = document.getElementById('chat');
+			chatElement.innerHTML = "";
+			
+			var otherUser = data.title;
+			
+			for (var i=0; i < data.messages.length; i++) {
+				var message = reverseOrder ? data.messages[data.messages.length - 1 - i] : data.messages[i];
+				var wasReceived = data.title == message.sender_name || message.sender_name == "Other User";
+				var showName = alwaysShowName || data.participants.length > 2;
+
+				renderMessage(chatElement, message, wasReceived, showName);
+			}
+		}
+	</script>
+</head>
+<body>
+<input type="file" id="file-selector" accept=".json">
+<script>
+  const fileSelector = document.getElementById('file-selector');
+  fileSelector.addEventListener('change', (event) => {
+    const fileList = event.target.files;
+	
+	const reader = new FileReader();
+	reader.addEventListener('load', e => {
+		var result = reader.result;
+		
+		if (fbSpecialDecoding) {
+			var bytes = new TextEncoder().encode(result);
+			var alteredBytes = new Uint8Array(bytes.length);
+			
+			var ai = 0;
+			var escapeCode = "\\".charCodeAt(0);
+			var uCode = "u".charCodeAt(0);
+			for (var i=0; i < bytes.length; i++) {
+				// in case of overflow the data are invalid anyway and I'm not paid to do pretty error messages so it is what it is
+				if (bytes[i] == escapeCode && bytes[i+1] == uCode) {
+					// four characters follow, last two are important, the format is \u00XX, we need to convert the XX hex value to int
+					alteredBytes[ai++] = parseInt("0x" + String.fromCharCode(bytes[i+4]) + String.fromCharCode(bytes[i+5]));
+					i+=5; // skip the next five values (the u00XX), they were already processed
+				} else {
+					alteredBytes[ai++] = bytes[i];
+				}
+			}
+			var finalBytes = alteredBytes.slice(0, ai);
+			result = new TextDecoder('utf-8').decode(finalBytes);
+		}
+		var data = JSON.parse(result);
+		console.log(data);
+
+		processData(data);
+	});
+	reader.readAsText(fileList[0], 'UTF-8');
+  });
+</script>
+
+<div id="chat">
+
+</div>
+
+</body>
+</html>
